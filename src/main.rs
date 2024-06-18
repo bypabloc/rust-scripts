@@ -1,20 +1,61 @@
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use walkdir::{DirEntry, WalkDir};
+use walkdir::WalkDir;
+use clap::{App, Arg};
+use chrono::Local;
+use x11_clipboard::Clipboard;
+use std::thread;
+use std::time::Duration;
 
 fn main() -> io::Result<()> {
-    let directory = "/home/bypablo/projects/destacame/easy-pay";
-    let output_file = "output.txt";
-    let excluded_files = vec!["__init__.py","package-lock.json", "django.mo"];
-    let excluded_extensions = vec!["exe", "bin"];
-    let excluded_folders = vec!["__pycache__",".venv","node_modules"];
+    let matches = App::new("Tree and File Content Writer")
+        .version("1.0")
+        .author("Pablo Contreras")
+        .about("Generates a tree structure and file contents")
+        .arg(Arg::new("path")
+            .short('p')
+            .long("path")
+            .value_name("DIRECTORY")
+            .help("Sets the path to the directory")
+            .takes_value(true)
+            .required(true))
+        .arg(Arg::new("excluded_files")
+            .long("excluded_files")
+            .value_name("FILES")
+            .help("Sets the files to be excluded, separated by commas")
+            .takes_value(true)
+            .default_value(""))
+        .arg(Arg::new("excluded_extensions")
+            .long("excluded_extensions")
+            .value_name("EXTENSIONS")
+            .help("Sets the file extensions to be excluded, separated by commas")
+            .takes_value(true)
+            .default_value(""))
+        .arg(Arg::new("excluded_folders")
+            .long("excluded_folders")
+            .value_name("FOLDERS")
+            .help("Sets the folders to be excluded, separated by commas")
+            .takes_value(true)
+            .default_value(""))
+        .get_matches();
 
-    let mut output = File::create(output_file)?;
+    let directory = matches.value_of("path").unwrap();
+    let excluded_files: Vec<&str> = matches.value_of("excluded_files").unwrap().split(',').collect();
+    let excluded_extensions: Vec<&str> = matches.value_of("excluded_extensions").unwrap().split(',').collect();
+    let excluded_folders: Vec<&str> = matches.value_of("excluded_folders").unwrap().split(',').collect();
+
+    let now = Local::now();
+    let output_file = format!(".output-{}.txt", now.format("%Y-%m-%d-%H-%M-%S"));
+
+    let mut output = File::create(&output_file)?;
+    let mut clipboard_content = String::new();
 
     // Write the tree structure
     let tree_structure = generate_tree_structure(directory, &excluded_folders, &excluded_files, &excluded_extensions);
     writeln!(output, "{}", tree_structure)?;
+    clipboard_content.push_str(&tree_structure);
+    clipboard_content.push('\n');
 
     // Write the file contents
     for entry in WalkDir::new(directory)
@@ -24,9 +65,26 @@ fn main() -> io::Result<()> {
     {
         let path = entry.path();
         if path.is_file() {
-            write_file_content(&mut output, path)?;
+            let content = write_file_content(&mut output, path, directory)?;
+            clipboard_content.push_str(&content);
+            clipboard_content.push('\n');
         }
     }
+
+    println!("Output written to {}", output_file);
+
+    // Copy content to clipboard
+    let clipboard = Clipboard::new().expect("Failed to create clipboard context");
+    clipboard.store(
+        clipboard.setter.atoms.clipboard,
+        clipboard.setter.atoms.utf8_string,
+        clipboard_content.as_bytes(),
+    ).expect("Failed to store content to clipboard");
+
+    println!("Content copied to clipboard.");
+
+    // Keep the program running to ensure the clipboard content remains available
+    thread::sleep(Duration::from_secs(1));
 
     Ok(())
 }
@@ -91,12 +149,20 @@ fn is_excluded(path: &Path, excluded_folders: &[&str], excluded_files: &[&str], 
     false
 }
 
-fn write_file_content(output: &mut File, path: &Path) -> io::Result<()> {
-    writeln!(output, "Path: {}", path.display())?;
-    writeln!(output, "Content:")?;
-    writeln!(output, "```")?;
-    let content = fs::read_to_string(path)?;
+fn write_file_content(output: &mut File, path: &Path, directory: &str) -> io::Result<String> {
+    let root = Path::new(directory).file_name().unwrap_or_default();
+    let relative_path = path.strip_prefix(directory).unwrap_or(path);
+    let short_path = format!("{}/{}", root.to_str().unwrap_or_default(), relative_path.display());
+
+    let mut content = String::new();
+    content.push_str(&format!("Path: {}\n", short_path));
+    content.push_str("Content:\n");
+    content.push_str("```\n");
+    let file_content = fs::read_to_string(path)?;
+    content.push_str(&file_content);
+    content.push_str("\n```\n");
+
     writeln!(output, "{}", content)?;
-    writeln!(output, "```")?;
-    Ok(())
+
+    Ok(content)
 }
