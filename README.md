@@ -60,3 +60,22 @@ Para poder ejecutar tu script de Rust desde cualquier carpeta sin necesidad de e
    ```
 
 Con estos pasos, tu script de Rust debería poder ejecutarse desde cualquier directorio en tu sistema.
+
+### Usando el nuevo script para compilar y ejecutar el proyecto
+
+Hemos agregado un nuevo script para automatizar la compilación del proyecto de Rust y proporcionar un comando de copia y pega para la ejecución. Aquí te explicamos cómo usarlo:
+
+1. **Ejecuta el script de compilación y ejecución**:
+   - Esto compilará el proyecto en modo release y generará un comando para ejecutar el binario compilado.
+   ```sh
+   ./scripts/build_and_run.sh
+   ```
+
+2. **Copia y pega el comando generado**:
+   - El script imprimirá un comando en la consola que puedes copiar y pegar para ejecutar el binario compilado.
+   ```sh
+   To run the compiled binary, use the following command:
+   ./target/release/rust-scripts
+   ```
+
+Con este nuevo script, puedes compilar y ejecutar fácilmente el proyecto de Rust sin necesidad de recordar los comandos manuales.
